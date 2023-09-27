@@ -1,7 +1,6 @@
-//test the bot methods
-const bot = require('./bot.js');
+const bot = require('../bot.js');
 const axios = require('axios');
-const constants = require('./constants.js');
+const constants = require('../utils/constants.js');
 
 jest.mock('axios');
 
@@ -17,7 +16,14 @@ describe('Bot functions', () => {
 
         };
 
-        mockResponse = {data: {ask: "26114.8290563242", bid: "26042.3380987695", currency: "USD"}};
+        config.lastAlertPrice.set("BTC-USD", 26120.8290563243);
+
+        mockResponse = {
+            data: {ask: "26114.8290563242", bid: "26042.3380987695", currency: "USD"},
+            headers: { date: 'Wed, 27 Sept 2023 16:28:00 GMT' }
+        };
+
+        console.log = jest.fn();
     });
 
     
@@ -28,14 +34,22 @@ describe('Bot functions', () => {
     test('Should call axios.get correctly', () => {
         
         axios.get.mockResolvedValue(mockResponse);
-        bot.alert(config);
+        bot.alert(null, config);
         
         expect(axios.get).toHaveBeenCalledTimes(config.currencyPairs.length);
 
-        config.currencyPairs.forEach(currencyPair => {
+        for (const currencyPair of config.currencyPairs) {
             expect(axios.get).toHaveBeenCalledWith(constants.URL + currencyPair);
-        });
+        }
 
+    });
+
+    test('Recognize price variation greater than the threshold', () => {
+            
+            axios.get.mockResolvedValue(mockResponse);
+            expect(bot.priceVariation(26114.8290563242, config.lastAlertPrice.get("BTC-USD"), config.priceChangeThreshold)).toBe(true);
+            expect(bot.priceVariation(26120.8290563243, config.lastAlertPrice.get("BTC-USD"), config.priceChangeThreshold)).toBe(false);
+    
     });
 
     test('Handle currency pair not found error', () => {

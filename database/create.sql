@@ -1,0 +1,18 @@
+DROP TABLE IF EXISTS Config;
+DROP TABLE IF EXISTS Alert;
+DROP TABLE IF EXISTS CurrencyPair;
+
+CREATE TABLE CurrencyPair (
+    id SERIAL PRIMARY KEY,
+    name text UNIQUE NOT NULL
+);
+
+
+CREATE TABLE Alert (
+    id SERIAL PRIMARY KEY,
+    currency_pair_id INTEGER NOT NULL REFERENCES CurrencyPair(id) ON DELETE CASCADE,
+    time_stamp TIMESTAMP WITH TIME ZONE NOT NULL,
+    old_price NUMERIC NOT NULL,
+    new_price NUMERIC NOT NULL,
+    config JSONB NOT NULL
+);

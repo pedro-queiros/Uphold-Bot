@@ -1,5 +1,6 @@
 const axios = require("axios");
-const constants = require('./constants.js');
+const constants = require('./utils/constants.js');
+const database = require('./database.js');
 
 
 // Get Currency pair price from Uphold API
@@ -7,7 +8,7 @@ async function getCurrencyPairPrice(currencyPair, config) {
     try {
         // Make request to Uphold API for the currency pair
         const response = await axios.get(constants.URL + currencyPair);
-        return parseFloat(response.data["ask"]);
+        return [response.headers.date, parseFloat(response.data["ask"])];
     } catch (error) {
         // Handle errors raised
         handleErrors(error.response.data.code, currencyPair, config);
@@ -20,48 +21,26 @@ function priceVariation(currentPrice, lastAlertPrice, priceChangeThreshold){
 }
 
 // Alert function responsible for fetching the price of each currency pair and printing the alert if necessary
-function alert(config){
-    config.currencyPairs.forEach(currencyPair => {
+async function alert(client, config){
+    for (const currencyPair of config.currencyPairs) {
         getCurrencyPairPrice(currencyPair, config)
-        .then((currentPrice) => {
-            if(!config.lastAlertPrice.has(currencyPair)){
+        .then(async ([timestamp, currentPrice]) => {
+            if (!config.lastAlertPrice.has(currencyPair)){
                 // It is the first time we fetch the price for this currency pair
                 config.lastAlertPrice.set(currencyPair, currentPrice);
             }
-            else if(priceVariation(currentPrice, config.lastAlertPrice.get(currencyPair), config.priceChangeThreshold)){
-                // Price variation greater than the threshold, printing the alert
+            else if (priceVariation(currentPrice, config.lastAlertPrice.get(currencyPair), config.priceChangeThreshold)){
+                // Price variation greater than the threshold, printing the alert and uodating the last alert price
                 console.log("Alert! " + currencyPair + " price changed by " + config.priceChangeThreshold +  "%: from "
                  + config.lastAlertPrice.get(currencyPair) + " to " + currentPrice);
+                await database.insertAlert(client, currencyPair, timestamp, currentPrice, config);
+                // Update last alert price only after the alert being saved in the database
                 config.lastAlertPrice.set(currencyPair, currentPrice);
             }
         
         });
 
-    });
-}
-
-// Run the application by parsing the arguments and then calling the alert function in loop
-function run(){
-    let config = parseArguments();
-    console.log("Running...");
-    alert(config);
-    setInterval(() => alert(config), config.fetchInterval);
-
-}
-
-// Parse the arguments passed to the application, creating the config object
-function parseArguments() {
-
-    let config = {};
-    config.currencyPairs = (process.env.npm_config_currencyPairs && process.env.npm_config_currencyPairs.trim() || constants.DEFAULT_CURRENCY_PAIR).split(",");
-    config.fetchInterval = (process.env.npm_config_fetchInterval && parseInt(process.env.npm_config_fetchInterval)) || constants.DEFAULT_FETCH_INTERVAL;
-    config.fetchInterval = config.fetchInterval < constants.MIN_FETCH_INTERVAL ? constants.MIN_FETCH_INTERVAL : config.fetchInterval;
-    config.priceChangeThreshold = (process.env.npm_config_priceChangeThreshold && parseFloat(process.env.npm_config_priceChangeThreshold)) || constants.DEFAULT_PRICE_CHANGE_THRESHOLD;
-    config.priceChangeThreshold = config.priceChangeThreshold < constants.MIN_PRICE_CHANGE_THRESHOLD ? constants.MIN_PRICE_CHANGE_THRESHOLD : config.priceChangeThreshold;
-    config.lastAlertPrice = new Map();
-    
-    return config;
-    
+    };
 }
 
 function handleErrors(error, currencyPair, config){
@@ -79,12 +58,12 @@ function handleErrors(error, currencyPair, config){
             break;
         default:
             //unknown error
-            console.log("Error: unknown error");
+            console.error("Error", error);
             break;
     }
 }
 
 
-module.exports = {run, parseArguments, alert, handleErrors};
+module.exports = {getCurrencyPairPrice, priceVariation, alert, handleErrors};
 
 
