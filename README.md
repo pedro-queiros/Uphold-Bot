@@ -42,7 +42,7 @@ docker-compose down
 ```
 
 ## Testing
-To test the bot implementation, run the following command inside the ```bot``` folder:
+To test the bot implementation, run the following command inside the ```bot``` folder (node.js is required):
 ```
 npm test
 ```
